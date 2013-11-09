@@ -1,0 +1,201 @@
+-------------------------------------------------------------------------------
+CODE:
+-------------------------------------------------------------------------------
+
+#include<linux/mm_types.h> //struct page
+#include<linux/highmem.h>
+#include<linux/module.h>
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Anubhav Saini <IAmAnubhavSaini@GMail.com>");
+
+static   unsigned long free_dma_page_addr;
+static   unsigned long free_user_page_addr;
+static   struct page * free_highmem_page;
+
+static   unsigned long dma_pages[6];
+static   unsigned long user_pages[6];
+static   struct page * highmem_pages[6];
+
+static   struct page * highmem_page;
+static   unsigned long highmem_page_address;
+
+static   int order_dma;
+static   int order_user;
+static   int order_highmem;
+
+static int __init my_pager_init( void ){
+  
+  order_dma  = 0;
+  order_user = 0;
+  order_highmem = 0;
+  int i = 0; //index for highmem kmap loop //ISO C90 forbids mixed declarations and code warning
+
+  do{
+    free_dma_page_addr = __get_free_pages( GFP_KERNEL | GFP_DMA, order_dma );
+    if (! free_dma_page_addr ) break;
+//we could do return -ENOMEM; 
+//but we want to run the show further to user pages too.
+    dma_pages[order_dma] = free_dma_page_addr;
+    printk( KERN_ERR "Address for DMA page%c is : %lx. Order: %d.\n", 
+            order_dma ? ' ' : 's', 
+            free_dma_page_addr, 
+            order_dma 
+           );
+  }while ( order_dma++ < 6 );
+
+  do{
+    free_user_page_addr = __get_free_pages( GFP_KERNEL | GFP_USER, order_user );
+    if ( ! free_user_page_addr ) break;
+    user_pages[order_user] = free_user_page_addr;
+    printk( KERN_ERR "Address for user page%c is : %lx. Order: %d.\n", 
+            order_user ? ' ' : 's', 
+            free_user_page_addr,
+            order_user
+           );
+  }while( order_user++ < 6 );
+  
+  highmem_page = alloc_pages( GFP_HIGHUSER, 3 );
+  if ( ! highmem_page ) printk(KERN_ERR "Couldn't allocate highmem page with order : 3\n" );
+  else {
+    for( i = 0; i < 8 /* 2^3 */; i++ ){
+      highmem_page_address = kmap( highmem_page + i);
+      if ( ! highmem_page_address ) printk( KERN_ERR "Couldn't map highmem pages.\n");
+      else {
+        printk( KERN_ERR "Address for highuser pages is : %lx. Order: %d.\n", 
+                highmem_page_address,
+                3
+              );
+       }
+    }
+  }
+  
+/*  do{
+    free_highmem_page = alloc_pages( GFP_HIGHUSER, order_highmem );
+    if ( ! free_highmem_page ) break;
+    highmem_pages[order_highmem] = free_highmem_page;
+    printk( KERN_ERR "Address for highmem page%c is : %lx. Order: %d.\n", 
+            order_highmem ? ' ' : 's', 
+            free_highmem_page,
+            order_highmem
+           );
+  }while( order_highmem++ < 6 );
+*/
+  return 0;
+}
+
+static void __exit my_pager_exit( void ){
+  int local_order = 0;
+  int i = 0; // index for highmem unmap loop
+  for( local_order = 0; local_order < order_dma; local_order++ )
+    free_pages( dma_pages[local_order], local_order );
+  for( local_order = 0; local_order < order_user; local_order++ )
+    free_pages( user_pages[local_order], local_order );
+//freeing highuser pages
+  for( i = 0; i < 8 /* 2^3 */; i++ ){
+    kunmap( highmem_page + i );
+  }
+  __free_pages( highmem_page, 3 );
+
+
+/*  for( local_order = 0; local_order < order_highmem; local_order++ )
+    free_pages( highmem_pages[local_order], local_order );
+*/
+}
+
+module_init( my_pager_init );
+module_exit( my_pager_exit );
+
+-------------------------------------------------------------------------------
+OUTPUT:
+-------------------------------------------------------------------------------
+
+LDD_ASS_#_dmesg -c
+LDD_ASS_#_insmod prob4.ko
+LDD_ASS_#_dmesg
+[ 1093.658470] Address for DMA pages is : ffff880000098000. Order: 0.
+[ 1093.658479] Address for DMA page  is : ffff880000090000. Order: 1.
+[ 1093.658483] Address for DMA page  is : ffff880000094000. Order: 2.
+[ 1093.658488] Address for DMA page  is : ffff880000080000. Order: 3.
+[ 1093.658493] Address for DMA page  is : ffff880000010000. Order: 4.
+[ 1093.658498] Address for DMA page  is : ffff880000020000. Order: 5.
+[ 1093.658504] Address for DMA page  is : ffff880000040000. Order: 6.
+[ 1093.658507] Address for user pages is : ffff88005a231000. Order: 0.
+[ 1093.658512] Address for user page  is : ffff880059df2000. Order: 1.
+[ 1093.658516] Address for user page  is : ffff88005a210000. Order: 2.
+[ 1093.658520] Address for user page  is : ffff8800595f8000. Order: 3.
+[ 1093.658524] Address for user page  is : ffff88005a350000. Order: 4.
+[ 1093.658529] Address for user page  is : ffff88005a360000. Order: 5.
+[ 1093.658536] Address for user page  is : ffff88005a380000. Order: 6.
+[ 1093.658540] Address for highuser pages is : ffff88005a338000. Order: 3.
+[ 1093.658543] Address for highuser pages is : ffff88005a339000. Order: 3.
+[ 1093.658546] Address for highuser pages is : ffff88005a33a000. Order: 3.
+[ 1093.658549] Address for highuser pages is : ffff88005a33b000. Order: 3.
+[ 1093.658552] Address for highuser pages is : ffff88005a33c000. Order: 3.
+[ 1093.658555] Address for highuser pages is : ffff88005a33d000. Order: 3.
+[ 1093.658558] Address for highuser pages is : ffff88005a33e000. Order: 3.
+[ 1093.658561] Address for highuser pages is : ffff88005a33f000. Order: 3.
+LDD_ASS_#_rmmod prob4.ko
+Killed
+LDD_ASS_#_rmmod prob4.ko
+ERROR: Removing 'prob4': Device or resource busy
+LDD_ASS_#_dmesg
+[ 1093.658470] Address for DMA pages is : ffff880000098000. Order: 0.
+[ 1093.658479] Address for DMA page  is : ffff880000090000. Order: 1.
+[ 1093.658483] Address for DMA page  is : ffff880000094000. Order: 2.
+[ 1093.658488] Address for DMA page  is : ffff880000080000. Order: 3.
+[ 1093.658493] Address for DMA page  is : ffff880000010000. Order: 4.
+[ 1093.658498] Address for DMA page  is : ffff880000020000. Order: 5.
+[ 1093.658504] Address for DMA page  is : ffff880000040000. Order: 6.
+[ 1093.658507] Address for user pages is : ffff88005a231000. Order: 0.
+[ 1093.658512] Address for user page  is : ffff880059df2000. Order: 1.
+[ 1093.658516] Address for user page  is : ffff88005a210000. Order: 2.
+[ 1093.658520] Address for user page  is : ffff8800595f8000. Order: 3.
+[ 1093.658524] Address for user page  is : ffff88005a350000. Order: 4.
+[ 1093.658529] Address for user page  is : ffff88005a360000. Order: 5.
+[ 1093.658536] Address for user page  is : ffff88005a380000. Order: 6.
+[ 1093.658540] Address for highuser pages is : ffff88005a338000. Order: 3.
+[ 1093.658543] Address for highuser pages is : ffff88005a339000. Order: 3.
+[ 1093.658546] Address for highuser pages is : ffff88005a33a000. Order: 3.
+[ 1093.658549] Address for highuser pages is : ffff88005a33b000. Order: 3.
+[ 1093.658552] Address for highuser pages is : ffff88005a33c000. Order: 3.
+[ 1093.658555] Address for highuser pages is : ffff88005a33d000. Order: 3.
+[ 1093.658558] Address for highuser pages is : ffff88005a33e000. Order: 3.
+[ 1093.658561] Address for highuser pages is : ffff88005a33f000. Order: 3.
+[ 1113.849648] BUG: unable to handle kernel paging request at ffffeb880005a31c
+[ 1113.849658] IP: [<ffffffff8111e999>] __free_pages+0x9/0x40
+[ 1113.849669] PGD 0 
+[ 1113.849673] Oops: 0000 [#1] SMP 
+[ 1113.849679] CPU 0 
+[ 1113.849681] Modules linked in: prob4(O-) i915 drm_kms_helper drm i2c_algo_bit vmnet(O) ppdev parport_pc vsock(O) vmci(O) vmmon(O) dm_crypt snd_hda_codec_realtek snd_hda_intel snd_hda_codec snd_hwdep snd_pcm snd_seq_midi snd_rawmidi snd_seq_midi_event snd_seq snd_timer snd_seq_device pcmcia joydev snd r852 sm_common nand nand_ids mtd sdhci_pci nand_bch bch yenta_socket pcmcia_rsrc pcmcia_core arc4 soundcore sdhci r592 memstick nand_ecc asus_laptop lp rtl8187 sparse_keymap input_polldev snd_page_alloc psmouse mac80211 cfg80211 serio_raw parport eeprom_93cx6 dm_mirror dm_region_hash dm_log aufs 8139too 8139cp video
+[ 1113.849752] 
+[ 1113.849757] Pid: 2207, comm: rmmod Tainted: G           O 3.2.6 #4 TOSHIBA T20             /T20             
+[ 1113.849764] RIP: 0010:[<ffffffff8111e999>]  [<ffffffff8111e999>] __free_pages+0x9/0x40
+[ 1113.849771] RSP: 0018:ffff88005b655e78  EFLAGS: 00010216
+[ 1113.849774] RAX: 000001880005a300 RBX: ffffea000168ce00 RCX: 0000000000000024
+[ 1113.849778] RDX: 0000000000000000 RSI: 0000000000000006 RDI: ffffeb880005a300
+[ 1113.849781] RBP: ffff88005b655e78 R08: 0000000000000000 R09: 0000000000000005
+[ 1113.849785] R10: ffff88005f399fc8 R11: 0000000000000003 R12: ffffffffa03572f8
+[ 1113.849788] R13: ffff88005b655f18 R14: 00007fff1f5c9410 R15: 0000000000000001
+[ 1113.849793] FS:  00007ff58a5a3700(0000) GS:ffff88005f400000(0000) knlGS:0000000000000000
+[ 1113.849797] CS:  0010 DS: 0000 ES: 0000 CR0: 000000008005003b
+[ 1113.849801] CR2: ffffeb880005a31c CR3: 00000000594a4000 CR4: 00000000000006f0
+[ 1113.849804] DR0: 0000000000000000 DR1: 0000000000000000 DR2: 0000000000000000
+[ 1113.849808] DR3: 0000000000000000 DR6: 00000000ffff0ff0 DR7: 0000000000000400
+[ 1113.849813] Process rmmod (pid: 2207, threadinfo ffff88005b654000, task ffff88005b1316e0)
+[ 1113.849816] Stack:
+[ 1113.849818]  ffff88005b655ea8 ffffffff8111ea14 ffff88005b655e98 ffffffff00000006
+[ 1113.849825]  ffff88005b655ec8 0000000000000007 ffff88005b655ec8 ffffffffa0355049
+[ 1113.849832]  0000000000000880 ffffffffa0357000 ffff88005b655f78 ffffffff810a4cde
+[ 1113.849839] Call Trace:
+[ 1113.849845]  [<ffffffff8111ea14>] free_pages+0x44/0x50
+[ 1113.849852]  [<ffffffffa0355049>] my_pager_exit+0x49/0x1000 [prob4]
+[ 1113.849859]  [<ffffffff810a4cde>] sys_delete_module+0x19e/0x270
+[ 1113.849866]  [<ffffffff81645102>] system_call_fastpath+0x16/0x1b
+[ 1113.849869] Code: 04 25 d8 05 01 00 8b 4d b8 48 8b 55 c0 e9 fe fe ff ff 31 d2 48 89 de e8 06 c6 ff ff e9 6d ff ff ff 90 55 48 89 e5 66 66 66 66 90 <8b> 47 1c f0 ff 4f 1c 0f 94 c0 84 c0 74 09 85 f6 74 0d e8 60 d8 
+[ 1113.849927] RIP  [<ffffffff8111e999>] __free_pages+0x9/0x40
+[ 1113.849932]  RSP <ffff88005b655e78>
+[ 1113.849934] CR2: ffffeb880005a31c
+[ 1113.849939] ---[ end trace 58bcd0117b1c5303 ]---
+LDD_ASS_#_
+
