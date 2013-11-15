@@ -14,7 +14,7 @@ static   unsigned long user_pages[6];
 static   struct page * highmem_pages[6];
 
 static   struct page * highmem_page;
-static   unsigned long highmem_page_address;
+   unsigned long highmem_page_address;
 static   unsigned long highmem_page_addresses[8]; /* 2 ^ order(=3) */
 
 static   int order_dma;
@@ -39,7 +39,7 @@ static int __init my_pager_init( void ){
             free_dma_page_addr, 
             order_dma 
            );
-  }while ( order_dma++ < 6 );
+  }while ( order_dma++ < 4 );
 
   do{
     free_user_page_addr = __get_free_pages( GFP_KERNEL | GFP_USER, order_user );
@@ -57,7 +57,7 @@ static int __init my_pager_init( void ){
   else {
     for( i = 0; i < 8 /* 2^3 */; i++ ){
       highmem_page_addresses[i] = kmap( highmem_page + i);
-      if ( ! highmem_page_address ) printk( KERN_ERR "Couldn't map highmem pages.\n");
+      if ( ! highmem_page_addresses[i] ) printk( KERN_ERR "Couldn't map highmem pages.\n");
       else {
         printk( KERN_ERR "Address for highuser pages is : %lx. Order: %d.\n", 
                 highmem_page_addresses[i],
@@ -88,13 +88,14 @@ static void __exit my_pager_exit( void ){
     free_pages( dma_pages[local_order], local_order );
   for( local_order = 0; local_order < order_user; local_order++ )
     free_pages( user_pages[local_order], local_order );
+
 //freeing highuser pages
   for( i = 0; i < 8 /* 2^3 */; i++ ){
     kunmap( highmem_page + i );
   }
   free_pages( highmem_page_addresses[0], 3 /* order */ );
 
-  printk(KERN_ERR "Hihmem freed!");
+  printk(KERN_ERR "Hihmem freed!\n");
 
 /*  for( local_order = 0; local_order < order_highmem; local_order++ )
     free_pages( highmem_pages[local_order], local_order );
