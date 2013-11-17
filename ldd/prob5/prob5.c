@@ -11,6 +11,10 @@
  * 251 mydev
  * 252 usbmon
  * ---
+ * solved:
+ * dev_t dev made static, global, after calling alloc... deregister
+ * should use dev that was initialized by alloc...
+ * this comment will be removed when next update comes along.
  */
 
 #include<linux/cdev.h>
@@ -25,14 +29,16 @@
  */
 //#include<linux/kernel.h>
 
-static int num_of_devices_to_associate_with_driver = 1;
+static dev_t dev;
+
+static int num_of_devices_to_associate_with_driver = 2;
 module_param_named( num_devs, num_of_devices_to_associate_with_driver, int, 0644 );
 
 static int  __init prob_5_init( void ){
 printk(KERN_ALERT "Prob_5 initiated.\n");
 //code below:
-  dev_t dev = 101;
-  int dev_reg_res = alloc_chrdev_region( &dev, 101, 1, "mydev" );
+  dev = 1;
+  int dev_reg_res = alloc_chrdev_region( &dev, 101, 2, "my_temp_dev" );
   if( dev_reg_res != 0 ){
     printk(KERN_ERR "Device registration failed.\n" );
     return -1;
@@ -44,7 +50,7 @@ return 0;
 
 static void __exit prob_5_exit( void ){
 
-  unregister_chrdev_region( 101, 1 );
+  unregister_chrdev_region( dev, 2 );
 //nothing but printk after:
 printk(KERN_INFO "Prob_5 exited.\n");
 }
